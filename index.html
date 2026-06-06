@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Solvares Logistik</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#ed7119" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Solvares Scan" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand: #ed7119;
+      --brand-light: #fff3ea;
+      --brand-dark: #c45c0e;
+      --brand-text: #7a3200;
+      --red: #E24B4A;
+      --red-light: #FCEBEB;
+      --amber: #BA7517;
+      --amber-light: #FAEEDA;
+      --gray-50: #F8F8F6;
+      --gray-100: #F1EFE8;
+      --gray-200: #D3D1C7;
+      --gray-400: #888780;
+      --gray-600: #5F5E5A;
+      --gray-800: #444441;
+      --gray-900: #2C2C2A;
+      --white: #ffffff;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: var(--brand);
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+    }
+    .header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+    .header .subtitle { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+    .header-logo {
+      height: 40px;
+      width: auto;
+      object-fit: contain;
+      display: block;
+    }
+    .header-logo-fallback {
+      width: 40px; height: 40px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: white; letter-spacing: -0.5px;
+    }
+
+    .status-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 20px;
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-100);
+      font-size: 13px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--gray-200); flex-shrink: 0; transition: background 0.3s;
+    }
+    .status-dot.ready { background: var(--brand); }
+    .status-dot.scanning { background: var(--amber); animation: pulse 0.8s infinite; }
+    .status-dot.captured { background: #1D9E75; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .status-text { color: var(--gray-600); }
+
+    .camera-section { padding: 16px 20px 8px; }
+    .camera-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--gray-100);
+    }
+    .camera-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .camera-label {
+      font-size: 13px; font-weight: 500; color: var(--gray-600);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .cam-toggle {
+      font-size: 12px;
+      background: var(--brand-light);
+      color: var(--brand-text);
+      border: none; border-radius: 6px;
+      padding: 5px 10px; cursor: pointer; font-weight: 500;
+    }
+    .camera-wrapper { position: relative; aspect-ratio: 4/3; background: #000; }
+    #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #canvas { display: none; }
+
+    .cam-overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; transition: background 0.3s;
+    }
+    .cam-overlay.flash { background: rgba(255,255,255,0.6); }
+    .scan-frame {
+      width: 60%; aspect-ratio: 1;
+      border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 12px; position: relative;
+    }
+    .scan-frame::before, .scan-frame::after {
+      content: ''; position: absolute;
+      width: 20px; height: 20px;
+      border-color: var(--brand); border-style: solid;
+    }
+    .scan-frame::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-radius: 6px 0 0 0; }
+    .scan-frame::after  { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-radius: 0 0 6px 0; }
+
+    .rfid-zone { padding: 12px 20px; }
+    .rfid-card {
+      background: var(--white);
+      border-radius: var(--radius-md);
+      border: 1.5px dashed var(--gray-200);
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .rfid-card.active { border-color: var(--brand); background: var(--brand-light); }
+    .rfid-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--brand-light);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .rfid-card.active .rfid-icon { background: var(--brand); }
+    .rfid-info h3 { font-size: 14px; font-weight: 600; color: var(--gray-900); }
+    .rfid-info p  { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+    #rfidInput {
+      position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;
+    }
+    .last-id {
+      font-size: 12px; font-family: monospace;
+      background: var(--gray-100); padding: 3px 8px;
+      border-radius: 4px; margin-left: auto; flex-shrink: 0; color: var(--gray-800);
+    }
+
+    .history-section { flex: 1; padding: 0 20px 20px; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0 10px;
+    }
+    .section-title { font-size: 15px; font-weight: 600; color: var(--gray-900); }
+    .count-badge {
+      font-size: 12px;
+      background: var(--brand-light); color: var(--brand-text);
+      padding: 2px 8px; border-radius: 10px; font-weight: 500;
+    }
+    .clear-btn {
+      font-size: 12px; color: var(--red); background: none;
+      border: none; cursor: pointer; padding: 4px 8px;
+      border-radius: 6px; font-weight: 500;
+    }
+    .clear-btn:hover { background: var(--red-light); }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--gray-400); }
+    .empty-state svg { margin-bottom: 12px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; }
+
+    .scan-item {
+      background: var(--white);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--gray-100);
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px; margin-bottom: 10px;
+      animation: slideIn 0.25s ease;
+    }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .scan-thumb {
+      width: 64px; height: 64px; object-fit: cover;
+      border-radius: 8px; flex-shrink: 0;
+      background: var(--gray-100); cursor: pointer;
+    }
+    .scan-thumb-placeholder {
+      width: 64px; height: 64px; border-radius: 8px;
+      background: var(--gray-100); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .scan-meta { flex: 1; min-width: 0; }
+    .scan-uid {
+      font-size: 13px; font-weight: 600; font-family: monospace;
+      color: var(--gray-900); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .scan-time { font-size: 11px; color: var(--gray-400); margin-top: 3px; }
+    .scan-seq {
+      font-size: 11px; background: var(--gray-100); color: var(--gray-600);
+      padding: 2px 6px; border-radius: 4px; flex-shrink: 0; font-weight: 500;
+    }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88); z-index: 999;
+      flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-img { max-width: 100%; max-height: 70vh; border-radius: 12px; object-fit: contain; }
+    .modal-info { color: white; margin-top: 16px; text-align: center; }
+    .modal-info .uid { font-family: monospace; font-size: 16px; font-weight: 600; }
+    .modal-info .ts  { font-size: 12px; opacity: 0.6; margin-top: 4px; }
+    .modal-close {
+      margin-top: 20px; background: white; color: var(--gray-900);
+      border: none; border-radius: 8px; padding: 10px 28px;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+    }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--gray-900); color: white;
+      padding: 10px 20px; border-radius: 20px;
+      font-size: 13px; z-index: 1000;
+      transition: transform 0.3s ease; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    .install-banner {
+      display: none; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      background: var(--brand-light);
+      border-bottom: 1px solid #f5b07a;
+      font-size: 13px; color: var(--brand-text);
+    }
+    .install-banner.visible { display: flex; }
+    .install-btn {
+      margin-left: auto; background: var(--brand); color: white;
+      border: none; border-radius: 6px; padding: 5px 12px;
+      font-size: 12px; font-weight: 500; cursor: pointer; flex-shrink: 0;
+    }
+    .install-dismiss {
+      background: none; border: none; color: var(--brand-text);
+      cursor: pointer; padding: 2px 4px; font-size: 16px; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div>
+    <h1>Solvares Logistik</h1>
+    <div class="subtitle">Tempelkan kartu → foto otomatis</div>
+  </div>
+  <div id="logoWrap">
+    <img src="solvares.png" alt="Solvares" class="header-logo"
+         onerror="this.style.display='none'; document.getElementById('logoFallback').style.display='flex';" />
+    <div class="header-logo-fallback" id="logoFallback" style="display:none">SL</div>
+  </div>
+</header>
+
+<div class="install-banner" id="installBanner">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v13m0 0-3-3m3 3 3-3M3 17v3a1 1 0 001 1h16a1 1 0 001-1v-3"/></svg>
+  <span>Install app ke layar utama</span>
+  <button class="install-btn" id="installBtn">Install</button>
+  <button class="install-dismiss" id="dismissInstall">×</button>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span class="status-text" id="statusText">Memulai kamera...</span>
+</div>
+
+<div class="camera-section">
+  <div class="camera-card">
+    <div class="camera-header">
+      <span class="camera-label">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        Kamera langsung
+      </span>
+      <button class="cam-toggle" id="camToggle">Ganti kamera</button>
+    </div>
+    <div class="camera-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      <div class="cam-overlay" id="camOverlay">
+        <div class="scan-frame"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="rfid-zone">
+  <div class="rfid-card" id="rfidCard" onclick="focusInput()">
+    <div class="rfid-icon" id="rfidIcon">
+      <svg width="22" height="22" fill="none" stroke="#ed7119" stroke-width="2" viewBox="0 0 24 24" id="rfidIconSvg">
+        <path d="M9 2H7a2 2 0 00-2 2v4"/>
+        <path d="M9 22H7a2 2 0 01-2-2v-4"/>
+        <path d="M15 2h2a2 2 0 012 2v4"/>
+        <path d="M15 22h2a2 2 0 002-2v-4"/>
+        <rect x="7" y="9" width="10" height="6" rx="1"/>
+      </svg>
+    </div>
+    <div class="rfid-info">
+      <h3>Area Scan RFID</h3>
+      <p>Tempelkan kartu ke scanner</p>
+    </div>
+    <span class="last-id" id="lastIdBadge" style="display:none">—</span>
+    <input type="text" id="rfidInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+  </div>
+</div>
+
+<div class="history-section">
+  <div class="section-header">
+    <span class="section-title">Riwayat Scan</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="count-badge" id="countBadge">0 scan</span>
+      <button class="clear-btn" onclick="clearHistory()">Hapus semua</button>
+    </div>
+  </div>
+  <div id="scanList">
+    <div class="empty-state" id="emptyState">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+      </svg>
+      <p>Belum ada scan.<br/>Tempelkan kartu RFID ke scanner.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="photoModal" onclick="closeModal()">
+  <img class="modal-img" id="modalImg" src="" alt="Foto scan" />
+  <div class="modal-info">
+    <div class="uid" id="modalUid"></div>
+    <div class="ts" id="modalTs"></div>
+  </div>
+  <button class="modal-close">Tutup</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let stream = null, useFrontCam = true, scanHistory = [], scanCount = 0;
+  let inputBuffer = '', inputTimer = null, deferredPrompt = null;
+  const STORAGE_KEY = 'rfid_scan_history';
+  const MAX_HISTORY = 100;
+
+  const video       = document.getElementById('video');
+  const canvas      = document.getElementById('canvas');
+  const rfidInput   = document.getElementById('rfidInput');
+  const rfidCard    = document.getElementById('rfidCard');
+  const rfidIcon    = document.getElementById('rfidIcon');
+  const rfidIconSvg = document.getElementById('rfidIconSvg');
+  const camOverlay  = document.getElementById('camOverlay');
+  const statusDot   = document.getElementById('statusDot');
+  const statusText  = document.getElementById('statusText');
+  const lastIdBadge = document.getElementById('lastIdBadge');
+  const scanList    = document.getElementById('scanList');
+  const emptyState  = document.getElementById('emptyState');
+  const countBadge  = document.getElementById('countBadge');
+  const toast       = document.getElementById('toast');
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); deferredPrompt = e;
+    document.getElementById('installBanner').classList.add('visible');
+  });
+  document.getElementById('installBtn').onclick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('installBanner').classList.remove('visible');
+  };
+  document.getElementById('dismissInstall').onclick = () =>
+    document.getElementById('installBanner').classList.remove('visible');
+
+  if ('serviceWorker' in navigator)
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+
+  async function startCamera(front = true) {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: front ? 'user' : 'environment', width:{ideal:1280}, height:{ideal:960} }
+      });
+      video.srcObject = stream;
+      setStatus('ready', 'Siap scan — tempelkan kartu RFID');
+    } catch (err) {
+      setStatus('', 'Kamera tidak bisa dibuka: ' + err.message);
+      showToast('⚠️ Izin kamera diperlukan');
+    }
+  }
+
+  document.getElementById('camToggle').onclick = () => { useFrontCam = !useFrontCam; startCamera(useFrontCam); };
+
+  function setStatus(type, msg) {
+    statusDot.className = 'status-dot' + (type ? ' ' + type : '');
+    statusText.textContent = msg;
+  }
+
+  function focusInput() { rfidInput.focus(); }
+  document.addEventListener('click', focusInput);
+  document.addEventListener('keydown', focusInput);
+
+  rfidInput.addEventListener('focus', () => {
+    rfidCard.classList.add('active');
+    rfidIcon.style.background = '#ed7119';
+    rfidIconSvg.setAttribute('stroke', 'white');
+    setStatus('ready', 'Scanner aktif — siap menerima data RFID');
+  });
+  rfidInput.addEventListener('blur', () => {
+    rfidCard.classList.remove('active');
+    rfidIcon.style.background = '';
+    rfidIconSvg.setAttribute('stroke', '#ed7119');
+  });
+
+  rfidInput.addEventListener('input', () => {
+    clearTimeout(inputTimer);
+    inputBuffer = rfidInput.value;
+    setStatus('scanning', 'Membaca data kartu...');
+    inputTimer = setTimeout(() => {
+      if (inputBuffer.trim().length > 0) processRFID(inputBuffer.trim());
+    }, 200);
+  });
+
+  rfidInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      clearTimeout(inputTimer);
+      const uid = rfidInput.value.trim();
+      if (uid.length > 0) processRFID(uid);
+      e.preventDefault();
+    }
+  });
+
+  async function processRFID(uid) {
+    rfidInput.value = ''; inputBuffer = '';
+    setStatus('scanning', `Memproses: ${uid}`);
+    lastIdBadge.style.display = 'block';
+    lastIdBadge.textContent = uid.length > 12 ? uid.slice(0, 12) + '…' : uid;
+
+    camOverlay.classList.add('flash');
+    setTimeout(() => camOverlay.classList.remove('flash'), 300);
+
+    const photoDataUrl = captureFrame();
+    scanCount++;
+    const entry = { id: scanCount, uid, photo: photoDataUrl, timestamp: new Date().toISOString() };
+
+    scanHistory.unshift(entry);
+    if (scanHistory.length > MAX_HISTORY) scanHistory.pop();
+    saveHistory();
+    renderEntry(entry, true);
+    updateCount();
+
+    setStatus('captured', `✓ Scan ke-${scanCount}: ${uid}`);
+    showToast(`✓ Kartu ${uid} — foto tersimpan`);
+    setTimeout(() => { setStatus('ready', 'Siap scan — tempelkan kartu RFID berikutnya'); focusInput(); }, 1500);
+  }
+
+  function captureFrame() {
+    if (!stream) return null;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return null;
+    const { width, height } = track.getSettings();
+    canvas.width = width || 640; canvas.height = height || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  }
+
+  function renderEntry(entry, prepend = false) {
+    if (emptyState) emptyState.style.display = 'none';
+    const ts = new Date(entry.timestamp);
+    const timeStr = ts.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const dateStr = ts.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+
+    const item = document.createElement('div');
+    item.className = 'scan-item';
+    item.dataset.id = entry.id;
+
+    if (entry.photo) {
+      const img = document.createElement('img');
+      img.className = 'scan-thumb'; img.src = entry.photo; img.alt = 'Foto scan';
+      img.onclick = () => openModal(entry);
+      item.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'scan-thumb-placeholder';
+      ph.innerHTML = `<svg width="24" height="24" fill="none" stroke="#888" stroke-width="1.5" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`;
+      item.appendChild(ph);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'scan-meta';
+    meta.innerHTML = `<div class="scan-uid">${escapeHtml(entry.uid)}</div><div class="scan-time">${dateStr} · ${timeStr}</div>`;
+    item.appendChild(meta);
+
+    const seq = document.createElement('span');
+    seq.className = 'scan-seq'; seq.textContent = `#${entry.id}`;
+    item.appendChild(seq);
+
+    prepend ? scanList.insertBefore(item, scanList.firstChild) : scanList.appendChild(item);
+  }
+
+  function updateCount() { countBadge.textContent = `${scanHistory.length} scan`; }
+
+  function openModal(entry) {
+    if (!entry.photo) return;
+    document.getElementById('modalImg').src = entry.photo;
+    document.getElementById('modalUid').textContent = entry.uid;
+    const ts = new Date(entry.timestamp);
+    document.getElementById('modalTs').textContent =
+      ts.toLocaleString('id-ID', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    document.getElementById('photoModal').classList.add('open');
+  }
+  function closeModal() { document.getElementById('photoModal').classList.remove('open'); }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(scanHistory));
+    } catch(e) {
+      if (scanHistory.length > 20) { scanHistory = scanHistory.slice(0, 20); saveHistory(); }
+    }
+  }
+
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      scanHistory = JSON.parse(raw);
+      if (scanHistory.length > 0) {
+        scanCount = Math.max(...scanHistory.map(e => e.id || 0));
+        emptyState.style.display = 'none';
+        scanHistory.forEach(entry => renderEntry(entry, false));
+        updateCount();
+      }
+    } catch(e) { scanHistory = []; }
+  }
+
+  function clearHistory() {
+    if (!scanHistory.length || !confirm('Hapus semua riwayat scan?')) return;
+    scanHistory = []; scanCount = 0;
+    localStorage.removeItem(STORAGE_KEY);
+    scanList.innerHTML = '';
+    emptyState.style.display = '';
+    scanList.appendChild(emptyState);
+    updateCount(); lastIdBadge.style.display = 'none';
+    showToast('🗑️ Riwayat dihapus');
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg; toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadHistory();
+  startCamera(useFrontCam);
+  setTimeout(focusInput, 800);
+</script>
+</body>
+</html>
